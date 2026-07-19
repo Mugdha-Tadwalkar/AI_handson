@@ -242,13 +242,102 @@ Resume:
 
     resume = Resume(**data)
 
-    # Print extracted information
-    print("\n" + "=" * 60)
-    print(f"Resume: {file.name}")
-    print("=" * 60)
-    print("Name       :", resume.name)
-    print("Email      :", resume.email)
-    print("Skills     :", resume.skills)
-    print("Experience :", resume.experience)
-    print("Education  :", resume.education)
-    print("Projects   :", resume.projects)
+    # # Print extracted information
+    # print("\n" + "=" * 60)
+    # print(f"Resume: {file.name}")
+    # print("=" * 60)
+    # print("Name       :", resume.name)
+    # print("Email      :", resume.email)
+    # print("Skills     :", resume.skills)
+    # print("Experience :", resume.experience)
+    # print("Education  :", resume.education)
+    # print("Projects   :", resume.projects)
+
+
+class MatchResult(BaseModel):
+    score: int
+    matched_skills: list[str]
+    missing_skills: list[str]
+    reason: str
+
+Match_schema = MatchResult.model_json_schema()
+
+match_system_prompt = f"""
+You are an experienced HR recruiter.
+
+Your task is to compare a Job Description with a candidate's Resume.
+
+Return ONLY valid JSON matching this schema:
+
+{Match_schema}
+
+Rules:
+- Give an overall matching score between 0 and 100.
+- Compare required skills with the candidate's skills.
+- Compare preferred skills.
+- Compare experience.
+- Compare education.
+- Compare projects only if they are relevant to the job.
+- Mention which required skills are matched.
+- Mention which required skills are missing.
+- Give a short reason explaining the score.
+- Do NOT invent information.
+- Return ONLY valid JSON.
+"""
+
+match_system_message = {
+    "role": "system",
+    "content": match_system_prompt
+}
+
+#model_dump_json converts python objects into json as LLM doesnt understand python obj
+comparison_user_prompt = f"""
+Compare the following Job Description and Resume.
+
+Job Description:
+{jd.model_dump_json(indent=2)}
+
+Resume:
+{resume.model_dump_json(indent=2)}
+
+Compare them carefully.
+
+Return:
+- score
+- matched_skills
+- missing_skills
+- reason
+
+Return ONLY valid JSON.
+"""
+
+comparison_user_message = {
+    "role": "user",
+    "content": comparison_user_prompt
+}
+
+messages = [
+    match_system_message,
+    comparison_user_message
+]
+
+response = client.chat.completions.create(
+    model=model,
+    messages=messages,
+    temperature=0,
+    response_format=response_format
+)
+
+ans = response.choices[0].message.content
+
+match_data = json.loads(ans)
+
+match = MatchResult(**match_data)
+
+print("\n" + "=" * 60)
+print(f"Resume : {resume.name}")
+print("=" * 60)
+print("Score           :", match.score)
+print("Matched Skills  :", match.matched_skills)
+print("Missing Skills  :", match.missing_skills)
+print("Reason          :", match.reason)
