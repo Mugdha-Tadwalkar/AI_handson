@@ -3,6 +3,9 @@ from pathlib import Path
 from groq import Groq
 from dotenv import load_dotenv
 import json
+from pypdf import PdfReader
+from docx import Document
+
 load_dotenv()
 
 my_api_key=os.getenv("GROQ_API_KEY")
@@ -102,5 +105,43 @@ ans=response.choices[0].message.content
 raw_json=ans
 data_file=json.loads(raw_json)
 jd=JD(**data_file)
-print("Education Required: ",jd.education_req)
-print("Role : ",jd.job_role)
+#print("Education Required : ",jd.education_req)
+#print("Role : ",jd.job_role)
+
+resume_folder = Path("Resume")
+
+# print("\nFiles present in Resume folder:\n")
+
+#iterdir means it will give everything inside the folder.
+# for file in resume_folder.iterdir():
+#     if file.is_file():
+#         print(file.name)
+
+# Function to extract text from PDF
+def read_pdf(file_path):
+    text = ""
+
+    reader = PdfReader(file_path)
+
+    for page in reader.pages:
+        page_text = page.extract_text()
+
+        if page_text:
+            text += page_text + "\n"
+
+    return text
+
+
+# Function to extract text from DOCX
+def read_docx(file_path):
+    text = ""
+
+    doc = Document(file_path)
+
+    for para in doc.paragraphs:
+        text += para.text + "\n"
+
+    return text
+
+
+
