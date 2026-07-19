@@ -29,7 +29,7 @@ response_format={
     "type":"json_object"
 }
 
-system_prompt=f"""
+jd_system_prompt=f"""
 You are an expert HR assistant.
 
 Your job is to analyze job descriptions and extract
@@ -50,9 +50,9 @@ If information for a list is missing, return an empty list.
 Do not invent information.
 """
 
-message_system={
+jd_system_message={
     "role":"system",
-    "content":system_prompt
+    "content":jd_system_prompt
 }
 
 job_desc="""
@@ -99,7 +99,7 @@ user_message={
     "content":user_prompt
 }
 
-messages=[message_system,user_message]
+messages=[jd_system_message,user_message]
 response=client.chat.completions.create(model=model,messages=messages,temperature=0,response_format=response_format)
 ans=response.choices[0].message.content
 raw_json=ans
@@ -143,5 +143,112 @@ def read_docx(file_path):
 
     return text
 
+#structuring Resume object
 
+class Resume(BaseModel):
+    name: str
+    email: str
+    skills: list[str]
+    experience: float | None
+    education: list[str]
+    projects: list[str]
 
+Resume_schema=Resume.model_json_schema()
+
+response_format={
+    "type":"json_object"
+}
+
+resume_system_prompt = f"""
+You are an expert HR assistant.
+
+Your job is to analyze resumes and extract
+structured information from them.
+
+Return ONLY valid JSON matching this schema:
+
+{Resume_schema}
+
+IMPORTANT:
+Do NOT return the schema itself.
+Do NOT return fields like "properties", "title" or "type".
+Fill the schema with actual information extracted from the resume.
+
+Rules:
+- Extract the candidate's full name.
+- Extract the email address. If not available, return an empty string.
+- Extract all technical skills as a list.
+- Extract the total years of professional experience. If not mentioned, return null.
+- Extract all educational qualifications as a list.
+- Extract major projects as a list.
+- Do not invent information.
+- If any list field is missing, return an empty list.
+- Return ONLY valid JSON.
+"""
+resume_system_message={
+    "role":"system",
+    "content":resume_system_prompt
+}
+
+# -------------------------------
+# Read and Structure Every Resume
+# -------------------------------
+
+for file in resume_folder.iterdir():
+
+    if not file.is_file():
+        continue
+
+    # Extract text based on file type
+    if file.suffix.lower() == ".pdf":
+        resume_text = read_pdf(file)
+
+    elif file.suffix.lower() == ".docx":
+        resume_text = read_docx(file)
+
+    else:
+        print(f"Skipping unsupported file: {file.name}")
+        continue
+
+    # Create user prompt
+    resume_user_prompt = f"""
+Analyze the following resume and extract the required information.
+
+Resume:
+{resume_text}
+"""
+
+    resume_user_message = {
+        "role": "user",
+        "content": resume_user_prompt
+    }
+
+    messages = [
+        resume_system_message,
+        resume_user_message
+    ]
+
+    # Call LLM
+    response = client.chat.completions.create(
+        model=model,
+        messages=messages,
+        temperature=0,
+        response_format=response_format
+    )
+
+    # Convert JSON response into Resume object
+    ans = response.choices[0].message.content
+    data = json.loads(ans)
+
+    resume = Resume(**data)
+
+    # Print extracted information
+    print("\n" + "=" * 60)
+    print(f"Resume: {file.name}")
+    print("=" * 60)
+    print("Name       :", resume.name)
+    print("Email      :", resume.email)
+    print("Skills     :", resume.skills)
+    print("Experience :", resume.experience)
+    print("Education  :", resume.education)
+    print("Projects   :", resume.projects)
