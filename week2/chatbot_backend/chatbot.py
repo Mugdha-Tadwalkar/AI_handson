@@ -20,7 +20,7 @@ from pydantic import BaseModel
 def read_pdf():
     text = ""
 
-    reader = PdfReader("/workspaces/AI_handson/week2/resume_chatbot/Resume/MugdhaTadwalkar_CV.pdf")
+    reader = PdfReader("/workspaces/AI_handson/week2/chatbot_backend/Resume/MugdhaTadwalkar_CV.pdf")
 
     for page in reader.pages:
         page_text = page.extract_text()
