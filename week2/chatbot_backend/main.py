@@ -1,6 +1,41 @@
-def main():
-    print("Hello from resume-chatbot!")
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
+
+from chatbot import answer_question
 
 
-if __name__ == "__main__":
-    main()
+app = FastAPI(
+    title="Mugdha Portfolio AI Assistant",
+    version="1.0.0"
+)
+
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=False,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+class ChatRequest(BaseModel):
+    question: str
+
+
+@app.get("/")
+def root():
+    return {
+        "message": "Portfolio AI Assistant API is running"
+    }
+
+
+@app.post("/chat")
+def chat(request: ChatRequest):
+
+    answer = answer_question(request.question)
+
+    return {
+        "answer": answer
+    }

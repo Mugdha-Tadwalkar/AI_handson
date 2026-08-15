@@ -1,28 +1,50 @@
 import os
-from pathlib import Path
-from groq import Groq
-from dotenv import load_dotenv
 import json
+from pathlib import Path
+
+from dotenv import load_dotenv
+from groq import Groq
+from pydantic import BaseModel
 from pypdf import PdfReader
 
 
+# ==========================================
+# Load Environment Variables
+# ==========================================
+
 load_dotenv()
 
-my_api_key=os.getenv("GROQ_API_KEY")
+my_api_key = os.getenv("GROQ_API_KEY")
+
 if not my_api_key:
-    raise ValueError("Check the api key")
+    raise ValueError("Groq API Key Issue")
 
-client=Groq(api_key=my_api_key)
-model="llama-3.3-70b-versatile"
+client = Groq(api_key=my_api_key)
 
-from pydantic import BaseModel
+model = "llama-3.3-70b-versatile"
 
-def read_pdf():
+
+# ==========================================
+# Resume Path
+# ==========================================
+
+BASE_DIR = Path(__file__).resolve().parent.parent
+
+RESUME_PATH = "/workspaces/AI_handson/week2/chatbot_backend/Resume/MugdhaTadwalkar_CV.pdf"
+
+
+# ==========================================
+# Read Resume
+# ==========================================
+
+def read_resume():
+
+    reader = PdfReader(RESUME_PATH)
+
     text = ""
 
-    reader = PdfReader("/workspaces/AI_handson/week2/chatbot_backend/Resume/MugdhaTadwalkar_CV.pdf")
-
     for page in reader.pages:
+
         page_text = page.extract_text()
 
         if page_text:
@@ -30,83 +52,165 @@ def read_pdf():
 
     return text
 
+
+resume_text = read_resume()
+
+
+# ==========================================
+# Pydantic Models
+# ==========================================
+
 class Experience(BaseModel):
-    company:str
-    role:str
-    description:str
-    duration:str
+    company: str
+    role: str
+    duration: str
+    description: str
+
 
 class Resume(BaseModel):
-    name:str
-    education:list[str]
-    cgpa:float
-    skills:list[str] 
-    projects:list[str]    
-    certifications:list[str]
-    linkedin:str
-    github:str
-    contactno:str
-    experience:list[Experience]
+    name: str
+    phone: str
+    email: str
+    github: str
+    linkedin: str
+    location: str
+    summary: str
+    experience: list[Experience]
+    projects: list[str]
+    skills: list[str]
+    certifications: list[str]
 
 
-schema=Resume.model_json_schema()
+# ==========================================
+# Resume Parsing
+# ==========================================
 
-response_format={
-    "type":"json_object"
-}
+Resume_schema = Resume.model_json_schema()
 
-resume_system_prompt = f"""
+
+system_prompt = f"""
 You are an expert resume parser.
 
-Your task is to extract structured information from the given resume and return it as valid JSON.
+Extract structured information from the resume.
 
-The resume may contain information in different formats and section names. Extract information based on its meaning, not just the section headings.
+Return ONLY valid JSON following this schema.
 
-Examples:
-- "Experience", "Professional Experience", "Employment", "Work History", and "Internships" all represent work experience.
-- Skills may appear in dedicated skills sections, project descriptions, certifications, or work experience.
-- Projects may appear under "Projects", "Academic Projects", "Personal Projects", or within experience.
-
-Return ONLY a valid JSON object that strictly follows the schema below.
-
-JSON Schema:
-{schema}
+Schema:
+{Resume_schema}
 
 Rules:
-1. Follow the JSON schema exactly.
-2. Do NOT add fields that are not present in the schema.
-3. Extract only information explicitly mentioned in the resume.
-4. Do NOT guess, infer, or fabricate any information.
-5. If a string field is missing, return an empty string ("").
-6. If a list field has no information, return an empty list ([]).
-7. Preserve the original wording as much as possible.
-8. Remove duplicate values from lists while preserving order.
-9. Return ONLY the JSON object. Do not include explanations, markdown, or code fences.
+
+1. Follow the schema exactly.
+2. Do not add extra fields.
+3. Do not guess.
+4. Missing string -> ""
+5. Missing list -> []
+6. Return ONLY JSON.
 """
 
 
-resume_system_message={
-    "role":"system",
-    "content":resume_system_prompt
-}
-
-
-resume_text=read_pdf()
-
 user_prompt = f"""
-Extract the structured information from the following resume.
+Extract the structured information from this resume.
 
 Resume:
 
 {resume_text}
 """
 
-resume_user_message={
-    "role":"user",
-    "content":user_prompt
 
-}
-messages=[resume_system_message,resume_user_message]
-response=client.chat.completions.create(model=model,messages=messages,temperature=0,response_format=response_format)
-ans=response.choices[0].message.content
-print(ans)
+response = client.chat.completions.create(
+
+    model=model,
+
+    messages=[
+        {
+            "role": "system",
+            "content": system_prompt
+        },
+        {
+            "role": "user",
+            "content": user_prompt
+        }
+    ],
+
+    temperature=0,
+
+    response_format={
+        "type": "json_object"
+    }
+)
+
+
+# ==========================================
+# Convert LLM Response to Resume Object
+# ==========================================
+
+resume_data = json.loads(
+    response.choices[0].message.content
+)
+
+resume = Resume(**resume_data)
+
+resume_json = resume.model_dump_json(indent=2)
+
+
+# ==========================================
+# Chatbot System Prompt
+# ==========================================
+
+chatbot_system_prompt = f"""
+You are a helpful AI Resume Assistant.
+
+You have access to the following resume:
+
+{resume_json}
+
+Your job is to answer questions about the candidate.
+
+Rules:
+
+1. Answer ONLY using information from the resume.
+2. Never make up information.
+3. If the answer is not available in the resume, say:
+
+"This information is not available in the resume."
+
+4. Answer naturally in plain English.
+5. Do NOT return JSON unless the user explicitly asks for JSON.
+6. Keep answers concise and conversational.
+"""
+
+
+# ==========================================
+# Chat Function
+# ==========================================
+
+def answer_question(question: str):
+
+    chat_messages = [
+        {
+            "role": "system",
+            "content": chatbot_system_prompt
+        },
+        {
+            "role": "user",
+            "content": question
+        }
+    ]
+
+    response = client.chat.completions.create(
+
+        model=model,
+
+        messages=chat_messages,
+
+        temperature=0
+    )
+
+    answer = response.choices[0].message.content
+
+    return answer
+
+#query="projects"
+#result=answer_question(query)
+#print(result)
