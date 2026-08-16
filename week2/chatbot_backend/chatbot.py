@@ -185,3 +185,8 @@ def answer_question(question: str) -> str:
         print("Groq API Error:", e)
 
         return "Sorry, I could not process your question right now."
+
+
+#query="What is your college name?"
+#result=answer_question(query)
+#print(result)
