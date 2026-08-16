@@ -1,10 +1,7 @@
 "use client";
 
 import { useState } from "react";
-
-const API_URL =
-  process.env.NEXT_PUBLIC_API_URL ||
-  "https://animated-lamp-97545vqr5q9p3jgw-8000.app.github.dev";
+const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
 const exampleQuestions = [
   "What are Mugdha's skills?",
