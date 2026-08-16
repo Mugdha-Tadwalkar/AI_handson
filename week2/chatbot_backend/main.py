@@ -2,8 +2,12 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-from chatbot import answer_question
+from portfolio_chatbot import answer_question
 
+
+# ---------------------------------------------------------
+# FastAPI application
+# ---------------------------------------------------------
 
 app = FastAPI(
     title="Mugdha Portfolio AI Assistant",
@@ -11,25 +15,58 @@ app = FastAPI(
 )
 
 
+# ---------------------------------------------------------
+# CORS
+# ---------------------------------------------------------
+
 app.add_middleware(
     CORSMiddleware,
+
     allow_origins=["*"],
+
     allow_credentials=False,
+
     allow_methods=["*"],
+
     allow_headers=["*"],
 )
 
+
+# ---------------------------------------------------------
+# Request model
+# ---------------------------------------------------------
 
 class ChatRequest(BaseModel):
     question: str
 
 
+# ---------------------------------------------------------
+# Root endpoint
+# ---------------------------------------------------------
+
 @app.get("/")
 def root():
+
     return {
-        "message": "Portfolio AI Assistant API is running"
+        "message": "Mugdha Portfolio AI Assistant API is running"
     }
 
+
+# ---------------------------------------------------------
+# Health check
+# ---------------------------------------------------------
+
+@app.get("/health")
+def health():
+
+    return {
+        "status": "healthy"
+    }
+
+
+# ---------------------------------------------------------
+# Chat endpoint
+# ---------------------------------------------------------
 
 @app.post("/chat")
 def chat(request: ChatRequest):

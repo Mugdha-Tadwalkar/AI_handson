@@ -1,45 +1,53 @@
 import os
-import json
 from pathlib import Path
 
 from dotenv import load_dotenv
 from groq import Groq
-from pydantic import BaseModel
 from pypdf import PdfReader
 
 
-# ==========================================
-# Load Environment Variables
-# ==========================================
+# ---------------------------------------------------------
+# Load environment variables
+# ---------------------------------------------------------
 
 load_dotenv()
 
-my_api_key = os.getenv("GROQ_API_KEY")
+GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 
-if not my_api_key:
-    raise ValueError("Groq API Key Issue")
-
-client = Groq(api_key=my_api_key)
-
-model = "llama-3.3-70b-versatile"
+if not GROQ_API_KEY:
+    raise ValueError("GROQ_API_KEY is not set")
 
 
-# ==========================================
-# Resume Path
-# ==========================================
+# ---------------------------------------------------------
+# Groq client
+# ---------------------------------------------------------
 
-BASE_DIR = Path(__file__).resolve().parent.parent
+client = Groq(api_key=GROQ_API_KEY)
 
-RESUME_PATH = "/workspaces/AI_handson/week2/chatbot_backend/Resume/MugdhaTadwalkar_CV.pdf"
+MODEL = "llama-3.3-70b-versatile"
 
 
-# ==========================================
-# Read Resume
-# ==========================================
+# ---------------------------------------------------------
+# Resume path
+# ---------------------------------------------------------
 
-def read_resume():
+BASE_DIR = Path(__file__).resolve().parent
 
-    reader = PdfReader(RESUME_PATH)
+RESUME_PATH = BASE_DIR / "Resume" / "MugdhaTadwalkar_CV.pdf"
+
+
+# ---------------------------------------------------------
+# Read resume
+# ---------------------------------------------------------
+
+def read_resume() -> str:
+
+    if not RESUME_PATH.exists():
+        raise FileNotFoundError(
+            f"Resume not found at: {RESUME_PATH}"
+        )
+
+    reader = PdfReader(str(RESUME_PATH))
 
     text = ""
 
@@ -50,167 +58,130 @@ def read_resume():
         if page_text:
             text += page_text + "\n"
 
-    return text
+    if not text.strip():
+        raise ValueError("Could not extract text from the resume")
 
+    return text.strip()
+
+
+# ---------------------------------------------------------
+# Load resume once when application starts
+# ---------------------------------------------------------
 
 resume_text = read_resume()
 
 
-# ==========================================
-# Pydantic Models
-# ==========================================
-
-class Experience(BaseModel):
-    company: str
-    role: str
-    duration: str
-    description: str
-
-
-class Resume(BaseModel):
-    name: str
-    phone: str
-    email: str
-    github: str
-    linkedin: str
-    location: str
-    summary: str
-    experience: list[Experience]
-    projects: list[str]
-    skills: list[str]
-    certifications: list[str]
-
-
-# ==========================================
-# Resume Parsing
-# ==========================================
-
-Resume_schema = Resume.model_json_schema()
-
-
-system_prompt = f"""
-You are an expert resume parser.
-
-Extract structured information from the resume.
-
-Return ONLY valid JSON following this schema.
-
-Schema:
-{Resume_schema}
-
-Rules:
-
-1. Follow the schema exactly.
-2. Do not add extra fields.
-3. Do not guess.
-4. Missing string -> ""
-5. Missing list -> []
-6. Return ONLY JSON.
-"""
-
-
-user_prompt = f"""
-Extract the structured information from this resume.
-
-Resume:
-
-{resume_text}
-"""
-
-
-response = client.chat.completions.create(
-
-    model=model,
-
-    messages=[
-        {
-            "role": "system",
-            "content": system_prompt
-        },
-        {
-            "role": "user",
-            "content": user_prompt
-        }
-    ],
-
-    temperature=0,
-
-    response_format={
-        "type": "json_object"
-    }
-)
-
-
-# ==========================================
-# Convert LLM Response to Resume Object
-# ==========================================
-
-resume_data = json.loads(
-    response.choices[0].message.content
-)
-
-resume = Resume(**resume_data)
-
-resume_json = resume.model_dump_json(indent=2)
-
-
-# ==========================================
-# Chatbot System Prompt
-# ==========================================
+# ---------------------------------------------------------
+# System prompt
+# ---------------------------------------------------------
 
 chatbot_system_prompt = f"""
-You are a helpful AI Resume Assistant.
+You are Mugdha Tadwalkar's AI Portfolio Assistant.
 
-You have access to the following resume:
+Your job is to answer questions about Mugdha using ONLY the
+information contained in her resume below.
 
-{resume_json}
+================ RESUME ================
 
-Your job is to answer questions about the candidate.
+{resume_text}
 
-Rules:
+============== END RESUME ==============
 
-1. Answer ONLY using information from the resume.
-2. Never make up information.
-3. If the answer is not available in the resume, say:
 
-"This information is not available in the resume."
+IMPORTANT RULES:
 
-4. Answer naturally in plain English.
-5. Do NOT return JSON unless the user explicitly asks for JSON.
-6. Keep answers concise and conversational.
+1. Answer ONLY using information explicitly available in the resume.
+
+2. Never invent, assume, or guess information.
+
+3. If the requested information is not present in the resume,
+   respond with exactly:
+
+   "This information is not available in the resume."
+
+4. You can answer questions about:
+   - Education
+   - Degree
+   - College
+   - Work experience
+   - Companies
+   - Roles
+   - Projects
+   - Skills
+   - Programming languages
+   - AI technologies
+   - LLMs
+   - RAG
+   - Agentic AI
+   - Backend technologies
+   - Databases
+   - Cloud technologies
+   - Certifications
+   - Location
+   - Professional summary
+
+5. If the user asks a question such as:
+   "What is your education?"
+   "Where did Mugdha study?"
+   "What degree does she have?"
+   "Where does she work?"
+   "What projects has she worked on?"
+
+   Answer directly from the resume.
+
+6. Do not return JSON.
+
+7. Keep answers concise and conversational.
+
+8. If the user asks multiple questions, answer all of them
+   using only information available in the resume.
+
+9. Refer to the candidate naturally as "Mugdha" or "she".
+
+10. Do not claim that Mugdha has experience with a technology
+    unless that technology appears in the resume.
 """
 
 
-# ==========================================
-# Chat Function
-# ==========================================
+# ---------------------------------------------------------
+# Answer user question
+# ---------------------------------------------------------
 
-def answer_question(question: str):
+def answer_question(question: str) -> str:
 
-    chat_messages = [
-        {
-            "role": "system",
-            "content": chatbot_system_prompt
-        },
-        {
-            "role": "user",
-            "content": question
-        }
-    ]
+    if not question or not question.strip():
+        return "Please ask me a question about Mugdha."
 
-    response = client.chat.completions.create(
+    try:
 
-        model=model,
+        response = client.chat.completions.create(
 
-        messages=chat_messages,
+            model=MODEL,
 
-        temperature=0
-    )
+            messages=[
+                {
+                    "role": "system",
+                    "content": chatbot_system_prompt
+                },
+                {
+                    "role": "user",
+                    "content": question.strip()
+                }
+            ],
 
-    answer = response.choices[0].message.content
+            temperature=0
 
-    return answer
+        )
 
-#query="projects"
-#result=answer_question(query)
-#print(result)
+        answer = response.choices[0].message.content
+
+        if not answer:
+            return "Sorry, I could not generate an answer."
+
+        return answer.strip()
+
+    except Exception as e:
+
+        print("Groq API Error:", e)
+
+        return "Sorry, I could not process your question right now."
