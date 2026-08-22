@@ -12,8 +12,8 @@ groq_apikey=os.getenv("GROQ_API_KEY")
 qdrant_apikey=os.getenv("QDRANT_API_KEY")
 qdrant_url=os.getenv("QDRANT_URL")
 
-if not GROQ_API_KEY or QDRANT_API_KEY or QDRANT_URL:
-    print("Check your GROQ or QDRANT api key or URL")
+if not groq_apikey or not qdrant_apikey or not qdrant_url:
+    raise ValueError("Check your GROQ or QDRANT API key or URL")
 
 groq_client=Groq(api_key=groq_apikey)
 db_client=Qdrant(api_key=qdrant_apikey, url=qdrant_url)
@@ -118,7 +118,7 @@ If the answer is not present in the context, say:
 """
 
     response = llm_client.chat.completions.create(
-        model="llama-3.3-70b-versatile",
+        model="openai/gpt-oss-120b",
         messages=[
             {
                 "role": "user",
