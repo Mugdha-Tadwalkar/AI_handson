@@ -10,13 +10,13 @@ from qdrant_client.models import Distance, VectorParams, PointStruct
 load_dotenv()
 groq_apikey=os.getenv("GROQ_API_KEY")
 qdrant_apikey=os.getenv("QDRANT_API_KEY")
-qdrant_url=os.getenv("QDRANT_URL")
+qdrant_url=os.getenv("CLUSTER_ENDPOINT")
 
 if not groq_apikey or not qdrant_apikey or not qdrant_url:
     raise ValueError("Check your GROQ or QDRANT API key or URL")
 
 groq_client=Groq(api_key=groq_apikey)
-db_client=Qdrant(api_key=qdrant_apikey, url=qdrant_url)
+db_client=QdrantClient(api_key=qdrant_apikey, url=qdrant_url)
 
 print("now we are connected to qdrant and groq")
 
@@ -117,7 +117,7 @@ If the answer is not present in the context, say:
 "I don't know based on the provided information."
 """
 
-    response = llm_client.chat.completions.create(
+    response = groq_client.chat.completions.create(
         model="openai/gpt-oss-120b",
         messages=[
             {
